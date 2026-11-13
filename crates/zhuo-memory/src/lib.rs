@@ -193,6 +193,8 @@ impl MemoryStore {
         }
         let conn =
             Connection::open(path).with_context(|| format!("open sqlite: {}", path.display()))?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
+            .context("configure sqlite concurrency")?;
         let me = Self { conn };
         me.init_schema()?;
         Ok(me)
@@ -201,6 +203,8 @@ impl MemoryStore {
     /// 内存库（测试/临时会话用）
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory().context("open in-memory sqlite")?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
+            .context("configure in-memory sqlite")?;
         let me = Self { conn };
         me.init_schema()?;
         Ok(me)
@@ -754,6 +758,34 @@ mod tests {
         let hits = s2.search("苏菲", "苏菲的猫吃什么", 5).unwrap();
         assert!(hits.iter().any(|h| h.summary.contains("雪球")));
         let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn file_database_uses_wal_and_busy_timeout() {
+        let mut p = std::env::temp_dir();
+        p.push(format!("zhuo_wal_test_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&p);
+
+        let store = MemoryStore::open(&p).unwrap();
+        let journal_mode: String = store
+            .conn
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        let busy_timeout: i64 = store
+            .conn
+            .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
+        assert_eq!(busy_timeout, 5000);
+        drop(store);
+        let _ = std::fs::remove_file(&p);
+        let mut wal = p.as_os_str().to_os_string();
+        wal.push("-wal");
+        let _ = std::fs::remove_file(std::path::PathBuf::from(wal));
+        let mut shm = p.as_os_str().to_os_string();
+        shm.push("-shm");
+        let _ = std::fs::remove_file(std::path::PathBuf::from(shm));
     }
 
     #[test]

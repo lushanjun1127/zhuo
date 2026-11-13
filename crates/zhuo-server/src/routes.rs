@@ -27,6 +27,18 @@ pub struct ChatRequest {
     pub message: String,
     #[serde(default)]
     pub display_message: String,
+    #[serde(default)]
+    pub persona: Option<ChatPersona>,
+    #[serde(default)]
+    pub world_info: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChatPersona {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -73,7 +85,7 @@ fn default_export_format() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectionSettings {
+pub(crate) struct ConnectionSettings {
     #[serde(default = "default_provider")]
     pub provider: String,
     #[serde(default)]
@@ -82,6 +94,10 @@ pub struct ConnectionSettings {
     pub api_key: String,
     #[serde(default)]
     pub model: String,
+    #[serde(default)]
+    pub summary_model: String,
+    #[serde(default = "default_num_gpu")]
+    pub num_gpu: i64,
     #[serde(default = "default_temperature")]
     pub temperature: f32,
     #[serde(default = "default_max_tokens")]
@@ -111,17 +127,78 @@ fn default_top_p() -> f32 {
 fn default_repetition_penalty() -> f32 {
     1.0
 }
+fn default_num_gpu() -> i64 {
+    15
+}
+
+fn ollama_root(base_url: &str) -> String {
+    base_url
+        .trim()
+        .trim_end_matches('/')
+        .strip_suffix("/v1")
+        .unwrap_or(base_url.trim().trim_end_matches('/'))
+        .trim_end_matches('/')
+        .to_string()
+}
+
+pub(crate) fn api_base_url(connection: &ConnectionSettings, ollama_native: bool) -> String {
+    let base = connection.base_url.trim_end_matches('/');
+    if !ollama_native && connection.provider == "ollama" && !base.ends_with("/v1") {
+        format!("{base}/v1")
+    } else {
+        base.to_string()
+    }
+}
+
+fn ollama_model_names(payload: &Value) -> Vec<String> {
+    payload
+        .get("models")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|model| model.get("name").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect()
+}
+
+async fn fetch_ollama_models(base_url: &str) -> Result<Vec<String>, String> {
+    let url = format!("{}/api/tags", ollama_root(base_url));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("create Ollama client: {e}"))?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Ollama tags request failed: {e}"))?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let detail = match response.text().await {
+            Ok(detail) => detail.chars().take(500).collect::<String>(),
+            Err(e) => format!("could not read error response: {e}"),
+        };
+        return Err(format!("Ollama tags returned HTTP {status}: {detail}"));
+    }
+    let payload: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("parse Ollama tags response: {e}"))?;
+    Ok(ollama_model_names(&payload))
+}
 
 /// 连接设置的合并视图：以 .env 为基线（ServerState 已读入 ZHUO_API_BASE /
 /// ZHUO_API_KEY / ZHUO_MODEL），再用数据库里用户在设置面板保存的值覆盖。
 /// 优先级：.env 显式配置的 api_key 最高，避免「只读数据库」导致 .env 的 key
 /// 明明生效、接口却显示未配置的不一致。
-fn connection_settings(st: &ServerState) -> ConnectionSettings {
+pub(crate) fn connection_settings(st: &ServerState) -> ConnectionSettings {
     let mut cfg = ConnectionSettings {
         provider: "ollama".into(),
-        base_url: (*st.base_url).clone(),
+        base_url: ollama_root(&st.base_url),
         api_key: (*st.api_key).clone(),
         model: (*st.model).clone(),
+        summary_model: (*st.summary_model).clone(),
+        num_gpu: st.main_num_gpu,
         temperature: 0.8,
         max_tokens: 1024,
         top_p: 1.0,
@@ -130,11 +207,12 @@ fn connection_settings(st: &ServerState) -> ConnectionSettings {
         repetition_penalty: 1.0,
     };
     let mem = st.memory.lock().unwrap_or_else(|e| e.into_inner());
-    let saved = mem
-        .get_setting("connection")
-        .ok()
-        .flatten()
-        .and_then(|s| serde_json::from_str::<ConnectionSettings>(&s).ok());
+    let raw_saved = mem.get_setting("connection").ok().flatten();
+    let has_saved_summary_model = raw_saved
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .is_some_and(|value| value.get("summary_model").is_some());
+    let saved = raw_saved.and_then(|s| serde_json::from_str::<ConnectionSettings>(&s).ok());
     if let Some(saved) = saved {
         if !saved.base_url.trim().is_empty() {
             cfg.base_url = saved.base_url;
@@ -142,10 +220,15 @@ fn connection_settings(st: &ServerState) -> ConnectionSettings {
         if !saved.model.trim().is_empty() {
             cfg.model = saved.model;
         }
+        if has_saved_summary_model {
+            cfg.summary_model = saved.summary_model;
+        }
+        cfg.num_gpu = saved.num_gpu.clamp(0, 99);
         if !st.env_api_key && !saved.api_key.trim().is_empty() && saved.api_key != "••••••••"
         {
             cfg.api_key = saved.api_key;
         }
+
         cfg.provider = saved.provider;
         cfg.temperature = saved.temperature;
         cfg.max_tokens = saved.max_tokens;
@@ -154,7 +237,17 @@ fn connection_settings(st: &ServerState) -> ConnectionSettings {
         cfg.presence_penalty = saved.presence_penalty;
         cfg.repetition_penalty = saved.repetition_penalty;
     }
+    if cfg.provider == "ollama" {
+        cfg.base_url = ollama_root(&cfg.base_url);
+    }
     cfg
+}
+
+pub async fn ollama_tags(State(st): State<ServerState>) -> Json<serde_json::Value> {
+    match fetch_ollama_models(&connection_settings(&st).base_url).await {
+        Ok(models) => Json(json!({"models": models})),
+        Err(e) => Json(json!({"error": e})),
+    }
 }
 
 /// 标注实际生效的 api_key 来源，便于前端与 .env 对账。
@@ -461,6 +554,13 @@ pub async fn chat(State(st): State<ServerState>, Json(req): Json<ChatRequest>) -
         };
         // 状态机注入：有状态记录时在 System 尾部追加 [当前状态]
         let mut system = system_prompt(&card, &st.world);
+        crate::prompt::append_user_context(
+            &mut system,
+            req.persona
+                .as_ref()
+                .map(|persona| (persona.name.as_str(), persona.description.as_str())),
+            &req.world_info,
+        );
         if let Some(state) = mem.get_state(&card.id).ok().flatten() {
             if let Some(sb) = crate::prompt::render_state(&state) {
                 system.push_str("\n\n");
@@ -515,7 +615,7 @@ pub async fn chat(State(st): State<ServerState>, Json(req): Json<ChatRequest>) -
 
     // 3. 单段 spawn：调 Ollama 流式，token 转发；成功后消息与 token 用量入库
     let connection = connection_settings(&st);
-    let base = connection.base_url;
+    let base = api_base_url(&connection, st.ollama_native);
     let key = connection.api_key;
     let model = connection.model;
     let st2 = st.clone();
@@ -549,7 +649,7 @@ pub async fn chat(State(st): State<ServerState>, Json(req): Json<ChatRequest>) -
             presence_penalty: Some(connection.presence_penalty),
             repetition_penalty: Some(connection.repetition_penalty),
             // 主模型按 ZHUO_MAIN_NUM_GPU 分配 GPU 层数（默认 99）
-            num_gpu: Some(st2.main_num_gpu),
+            num_gpu: Some(connection.num_gpu),
             ollama_native: st2.ollama_native,
         };
         // token 转发；send 失败 = 客户端已断开（点「停止生成」或关页面）→ 返回 false
@@ -585,7 +685,9 @@ pub async fn chat(State(st): State<ServerState>, Json(req): Json<ChatRequest>) -
                 }
 
                 // 后台记忆提取：满 N 轮未处理即触发（per-card 防并发；失败不影响主流程）
-                if st2.summary_enabled() && st2.try_begin_extract(&card_key) {
+                if !connection_settings(&st2).summary_model.trim().is_empty()
+                    && st2.try_begin_extract(&card_key)
+                {
                     let st3 = st2.clone();
                     let cn = card_key.clone();
                     tokio::spawn(async move {
@@ -772,6 +874,7 @@ pub async fn set_connection(
     cfg.frequency_penalty = cfg.frequency_penalty.clamp(-2.0, 2.0);
     cfg.presence_penalty = cfg.presence_penalty.clamp(-2.0, 2.0);
     cfg.repetition_penalty = cfg.repetition_penalty.clamp(0.0, 2.0);
+    cfg.num_gpu = cfg.num_gpu.clamp(0, 99);
     let raw = serde_json::to_string(&cfg).unwrap_or_default();
     let mem = st.memory.lock().unwrap_or_else(|e| e.into_inner());
     match mem.set_setting("connection", &raw) {
@@ -867,7 +970,7 @@ pub async fn summarize(
     Json(req): Json<SummarizeRequest>,
 ) -> Json<serde_json::Value> {
     if !st.summary_enabled() {
-        return Json(json!({"error": "ZHUO_SUMMARY_MODEL 未设置，自动提取关闭"}));
+        return Json(json!({"error": "未选择记忆提取模型，自动提取关闭"}));
     }
     let key = st.card_key(&req.card);
     // 与后台自动提取共用 per-card 防并发：已在提取中直接告知，避免双写重复记忆
@@ -939,6 +1042,133 @@ fn unfold_rx(rx: UnboundedReceiver<String>) -> SseStream {
 #[cfg(test)]
 mod compatibility_tests {
     use super::*;
+
+    #[test]
+    fn ollama_root_accepts_openai_compatible_base_urls() {
+        assert_eq!(
+            ollama_root("http://127.0.0.1:11434/v1/"),
+            "http://127.0.0.1:11434"
+        );
+        assert_eq!(
+            ollama_root("http://127.0.0.1:11434"),
+            "http://127.0.0.1:11434"
+        );
+    }
+
+    #[test]
+    fn non_native_ollama_requests_keep_the_v1_path() {
+        let connection: ConnectionSettings = serde_json::from_value(json!({
+            "provider": "ollama",
+            "base_url": "http://127.0.0.1:11434",
+            "model": "main"
+        }))
+        .unwrap();
+        assert_eq!(
+            api_base_url(&connection, false),
+            "http://127.0.0.1:11434/v1"
+        );
+        assert_eq!(api_base_url(&connection, true), "http://127.0.0.1:11434");
+    }
+
+    #[test]
+    fn parses_ollama_model_names() {
+        let models = ollama_model_names(&json!({
+            "models": [
+                {"name": "qwen:latest"},
+                {"name": "llama:8b"},
+                {"size": 123}
+            ]
+        }));
+        assert_eq!(models, ["qwen:latest", "llama:8b"]);
+    }
+
+    #[tokio::test]
+    async fn ollama_tags_proxy_requests_local_api_tags() {
+        use std::io::{Read, Write};
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 1024];
+            let count = stream.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..count]);
+            assert!(request.starts_with("GET /api/tags "));
+            let body = r#"{"models":[{"name":"qwen:latest"}]}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .unwrap();
+        });
+
+        let models = fetch_ollama_models(&format!("http://{address}/v1"))
+            .await
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(models, ["qwen:latest"]);
+    }
+
+    #[test]
+    fn connection_settings_deserialize_old_and_new_model_fields() {
+        let old: ConnectionSettings = serde_json::from_value(json!({
+            "provider": "ollama",
+            "base_url": "http://127.0.0.1:11434",
+            "api_key": "",
+            "model": "main",
+            "temperature": 0.8,
+            "max_tokens": 1024,
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0,
+            "repetition_penalty": 1.0
+        }))
+        .unwrap();
+        assert_eq!(old.num_gpu, 15);
+        assert!(old.summary_model.is_empty());
+
+        let current: ConnectionSettings = serde_json::from_value(json!({
+            "summary_model": "extract",
+            "num_gpu": 24,
+            "provider": "ollama",
+            "base_url": "http://127.0.0.1:11434",
+            "api_key": "",
+            "model": "main",
+            "temperature": 0.8,
+            "max_tokens": 1024,
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0,
+            "repetition_penalty": 1.0
+        }))
+        .unwrap();
+        assert_eq!(current.summary_model, "extract");
+        assert_eq!(current.num_gpu, 24);
+    }
+
+    #[test]
+    fn chat_request_accepts_legacy_and_structured_context_payloads() {
+        let legacy: ChatRequest = serde_json::from_value(json!({
+            "card": "card-id",
+            "message": "Hello"
+        }))
+        .unwrap();
+        assert!(legacy.persona.is_none());
+        assert!(legacy.world_info.is_empty());
+
+        let current: ChatRequest = serde_json::from_value(json!({
+            "card": "card-id",
+            "message": "Hello",
+            "persona": {"name": "Traveler", "description": "A curious traveler."},
+            "world_info": ["The old bridge is guarded."]
+        }))
+        .unwrap();
+        assert_eq!(current.persona.unwrap().name, "Traveler");
+        assert_eq!(current.world_info, ["The old bridge is guarded."]);
+    }
+
     #[test]
     fn st_output_regex_honors_flags_placement_and_capture_groups() {
         let scripts = vec![RegexScript {

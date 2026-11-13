@@ -24,10 +24,8 @@ pub struct ServerState {
     pub summary_rounds: usize,
     /// per-card 提取防并发：正在提取的卡集合
     extracting: Arc<Mutex<HashSet<String>>>,
-    /// 主模型 GPU 层数（ZHUO_MAIN_NUM_GPU，默认 99 = 尽量全上 GPU）
+    /// 主模型 GPU 层数（ZHUO_MAIN_NUM_GPU，默认 15；连接设置可动态覆盖）
     pub main_num_gpu: i64,
-    /// 提取模型 GPU 层数（ZHUO_SUMMARY_NUM_GPU，默认 0 = 强制纯 CPU）
-    pub summary_num_gpu: i64,
     /// 走 Ollama 原生 /api/chat（默认 true），否则走 /v1/chat/completions
     pub ollama_native: bool,
     /// .env 是否显式配置了 ZHUO_API_KEY（决定连接设置的优先级与来源标注）
@@ -85,8 +83,7 @@ impl ServerState {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(8),
             extracting: Arc::new(Mutex::new(HashSet::new())),
-            main_num_gpu: parse_num_gpu(std::env::var("ZHUO_MAIN_NUM_GPU").ok(), 99),
-            summary_num_gpu: parse_num_gpu(std::env::var("ZHUO_SUMMARY_NUM_GPU").ok(), 0),
+            main_num_gpu: parse_num_gpu(std::env::var("ZHUO_MAIN_NUM_GPU").ok(), 15),
             ollama_native: env_flag("ZHUO_OLLAMA_NATIVE", true),
             env_api_key: std::env::var("ZHUO_API_KEY")
                 .map(|v| !v.trim().is_empty())
@@ -96,7 +93,15 @@ impl ServerState {
 
     /// 自动提取是否开启（ZHUO_SUMMARY_MODEL 已设置）
     pub fn summary_enabled(&self) -> bool {
-        !self.summary_model.is_empty()
+        let mem = self.memory.lock().unwrap_or_else(|e| e.into_inner());
+        if let Ok(Some(raw)) = mem.get_setting("connection") {
+            if let Ok(settings) = serde_json::from_str::<serde_json::Value>(&raw) {
+                if let Some(model) = settings.get("summary_model").and_then(|v| v.as_str()) {
+                    return !model.trim().is_empty();
+                }
+            }
+        }
+        !self.summary_model.trim().is_empty()
     }
 
     /// 尝试占用某卡的提取通道；已在提取中返回 false（防并发重复触发）
@@ -202,8 +207,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn saved_connection_models_override_environment_defaults() {
+        let memory = MemoryStore::open_in_memory().unwrap();
+        memory
+            .set_setting(
+                "connection",
+                r#"{"model":"selected-main","summary_model":"selected-summary","num_gpu":27}"#,
+            )
+            .unwrap();
+        let state = ServerState {
+            base_url: Arc::new("http://127.0.0.1:11434/v1".into()),
+            api_key: Arc::new("ollama".into()),
+            model: Arc::new("environment-main".into()),
+            cards_dir: Arc::new(PathBuf::from("examples")),
+            world: Arc::new(String::new()),
+            max_chars: 12000,
+            include_usage: true,
+            memory: Arc::new(Mutex::new(memory)),
+            summary_model: Arc::new("environment-summary".into()),
+            summary_rounds: 4,
+            extracting: Arc::new(Mutex::new(HashSet::new())),
+            main_num_gpu: 15,
+            ollama_native: true,
+            env_api_key: false,
+        };
+
+        let connection = crate::routes::connection_settings(&state);
+        assert_eq!(connection.model, "selected-main");
+        assert_eq!(connection.summary_model, "selected-summary");
+        assert_eq!(connection.num_gpu, 27);
+        assert!(state.summary_enabled());
+    }
+
+    #[test]
     fn gpu_split_defaults_and_overrides() {
-        assert_eq!(parse_num_gpu(None, 99), 99, "主模型默认全量上 GPU");
+        assert_eq!(parse_num_gpu(None, 15), 15, "主模型默认15层");
         assert_eq!(parse_num_gpu(None, 0), 0, "提取模型默认强制 CPU");
         assert_eq!(parse_num_gpu(Some(" 0 ".into()), 99), 0);
         assert_eq!(parse_num_gpu(Some("24".into()), 99), 24);

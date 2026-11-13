@@ -24,9 +24,14 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{middleware, Router};
 
-/// 纯 Web 形态下唯一允许的来源：Vite 前端（npm run start 打开的地址）。
-/// 必须用 http://localhost:3000 访问；127.0.0.1:3000 属于不同 Origin，会被拒绝。
-const ALLOWED_ORIGIN: &str = "http://localhost:3000";
+/// 纯 Web 形态下允许的本机 Vite 前端来源。
+const ALLOWED_ORIGINS: [&str; 2] = ["http://localhost:3000", "http://127.0.0.1:3000"];
+
+fn allowed_origin_header(origin: &str) -> Option<HeaderValue> {
+    ALLOWED_ORIGINS
+        .contains(&origin)
+        .then(|| HeaderValue::from_str(origin).expect("known origins are valid header values"))
+}
 
 /// 手写 CORS（不引 tower-http，尊重「能自己写 50 行就不引依赖」红线）。
 /// - 带 Origin 且不是白名单：直接 403，连预检也不放行（拒绝其他任何源）；
@@ -38,11 +43,10 @@ async fn cors(req: Request<Body>, next: Next) -> Response {
         .get(header::ORIGIN)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
+    let allowed_origin = origin.as_deref().and_then(allowed_origin_header);
 
-    if let Some(o) = origin.as_deref() {
-        if o != ALLOWED_ORIGIN {
-            return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
-        }
+    if origin.is_some() && allowed_origin.is_none() {
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
 
     let mut res = if req.method() == Method::OPTIONS {
@@ -51,11 +55,8 @@ async fn cors(req: Request<Body>, next: Next) -> Response {
         next.run(req).await
     };
     let h = res.headers_mut();
-    if origin.is_some() {
-        h.insert(
-            header::ACCESS_CONTROL_ALLOW_ORIGIN,
-            HeaderValue::from_static(ALLOWED_ORIGIN),
-        );
+    if let Some(allowed_origin) = allowed_origin {
+        h.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, allowed_origin);
         h.insert(header::VARY, HeaderValue::from_static("Origin"));
     }
     h.insert(
@@ -76,26 +77,27 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(1127);
+    let connection = routes::connection_settings(&st);
 
     println!("酌 / zhuo-server");
     println!("  推理端点   : {}", st.base_url);
-    println!("  模型       : {}（可用 ZHUO_MODEL 覆盖）", st.model);
+    println!("  模型       : {}", connection.model);
     println!("  角色卡目录 : {:?}", st.cards_dir);
     println!("  记忆库     : SQLite FTS5 + jieba（ZHUO_DB，默认 zhuo.db）");
-    if st.summary_enabled() {
+    if !connection.summary_model.trim().is_empty() {
         println!(
             "  提取模型   : {}（每 {} 条未处理消息自动总结一轮）",
-            st.summary_model, st.summary_rounds
+            connection.summary_model, st.summary_rounds
         );
     } else {
-        println!("  提取模型   : 未启用（设置 ZHUO_SUMMARY_MODEL 开启后台自动记忆提取）");
+        println!("  提取模型   : 未启用（可在设置面板选择记忆提取模型）");
     }
-    if std::env::var("ZHUO_MODEL").is_err() {
+    if std::env::var("ZHUO_MODEL").is_err() && connection.model == "qwen2.5-coder:3b" {
         println!("  [提示] 未设置 ZHUO_MODEL，默认 qwen2.5-coder:3b；本机缓存的完整名可用 ollama list 查看");
     }
     println!(
-        "  GPU 分流     : 主模型 num_gpu={} / 提取模型 num_gpu={}（0 = 强制 CPU）",
-        st.main_num_gpu, st.summary_num_gpu
+        "  GPU 分流     : 主模型 num_gpu={} / 提取模型 num_gpu=0（强制 CPU）",
+        connection.num_gpu
     );
     println!(
         "  推理通道     : {}",
@@ -111,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/cards", get(routes::cards))
         .route("/api/cards/import", post(routes::import_card))
         .route("/api/cards/:id/export", get(routes::export_card))
+        .route("/api/ollama/tags", get(routes::ollama_tags))
         .route("/api/compatibility", get(routes::compatibility))
         .route(
             "/api/compatibility/worldbook",
@@ -149,4 +152,17 @@ async fn main() -> anyhow::Result<()> {
     println!("  监听       : http://127.0.0.1:{port}");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allows_only_local_vite_origins() {
+        assert!(allowed_origin_header("http://localhost:3000").is_some());
+        assert!(allowed_origin_header("http://127.0.0.1:3000").is_some());
+        assert!(allowed_origin_header("http://192.168.1.2:3000").is_none());
+        assert!(allowed_origin_header("https://localhost:3000").is_none());
+    }
 }

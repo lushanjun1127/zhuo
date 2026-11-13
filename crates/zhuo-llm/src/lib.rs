@@ -435,8 +435,22 @@ pub async fn stream_chat_ex(
         .bearer_auth(cfg.api_key)
         .json(&body)
         .send()
-        .await?
-        .error_for_status()?;
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.context("read upstream error response")?;
+        let detail: String = body.trim().chars().take(2048).collect();
+        let truncated = body.trim().chars().count() > 2048;
+        let detail = if truncated {
+            format!("{detail}... (response truncated)")
+        } else {
+            detail
+        };
+        if detail.is_empty() {
+            return Err(anyhow!("upstream returned HTTP {status}"));
+        }
+        return Err(anyhow!("upstream returned HTTP {status}: {detail}"));
+    }
 
     let mut dump: Option<std::fs::File> = match cfg.dump_path {
         Some(p) => {
@@ -745,6 +759,58 @@ mod tests {
             .await;
         });
         format!("http://{}", addr)
+    }
+
+    async fn mock_error_server(body: &'static str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let _request = read_request(&mut sock).await;
+            let head = format!(
+                "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = sock.write_all(head.as_bytes()).await;
+            let _ = sock.write_all(body.as_bytes()).await;
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+                let mut sink = [0u8; 1024];
+                loop {
+                    match sock.read(&mut sink).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {}
+                    }
+                }
+            })
+            .await;
+        });
+        format!("http://{}", addr)
+    }
+
+    #[tokio::test]
+    async fn upstream_http_error_includes_response_body() {
+        let base = mock_error_server(r#"{"error":"CUDA out of memory"}"#).await;
+        let cfg = StreamConfig {
+            base_url: &base,
+            api_key: "test-key",
+            model: "mock-model",
+            include_usage: false,
+            dump_path: None,
+            response_format: None,
+            temperature: None,
+            max_tokens: None,
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            repetition_penalty: None,
+            num_gpu: Some(99),
+            ollama_native: true,
+        };
+        let err = stream_chat_ex(&cfg, &[Msg::user("hi")], |_| true)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("HTTP 500"), "{err}");
+        assert!(err.to_string().contains("CUDA out of memory"), "{err}");
     }
 
     #[tokio::test]

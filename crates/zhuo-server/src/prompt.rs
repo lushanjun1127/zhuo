@@ -28,6 +28,34 @@ pub fn system_prompt(card: &Card, world: &str) -> String {
     parts.join("\n\n")
 }
 
+pub fn append_user_context(
+    system: &mut String,
+    persona: Option<(&str, &str)>,
+    world_info: &[String],
+) {
+    if let Some((name, description)) = persona {
+        if !description.trim().is_empty() {
+            system.push_str("\n\n[User Persona");
+            if !name.trim().is_empty() {
+                system.push_str(": ");
+                system.push_str(name.trim());
+            }
+            system.push_str("]\n");
+            system.push_str(description.trim());
+        }
+    }
+
+    let entries = world_info
+        .iter()
+        .map(|entry| entry.trim())
+        .filter(|entry| !entry.is_empty())
+        .collect::<Vec<_>>();
+    if !entries.is_empty() {
+        system.push_str("\n\n[World Info]\n");
+        system.push_str(&entries.join("\n\n"));
+    }
+}
+
 /// 世界设定 JSON 全量拍平：递归收集所有字符串值。
 pub fn world_text(v: &Value) -> String {
     let mut parts = Vec::new();
@@ -235,5 +263,20 @@ mod tests {
         assert!(sys.contains("[世界设定]"));
         assert!(sys.contains("[当前状态]"));
         assert!(sys.contains("位置：冬堡学院"));
+    }
+
+    #[test]
+    fn user_persona_and_local_world_info_are_system_context() {
+        let mut system = "Character".to_string();
+        append_user_context(
+            &mut system,
+            Some(("Traveler", "A curious traveler.")),
+            &["  The old bridge is guarded.  ".into(), " ".into()],
+        );
+
+        assert_eq!(
+            system,
+            "Character\n\n[User Persona: Traveler]\nA curious traveler.\n\n[World Info]\nThe old bridge is guarded."
+        );
     }
 }

@@ -151,6 +151,12 @@ pub fn extract_summary(raw: &str) -> Option<String> {
 /// 执行一次提取。返回 Ok(Some(summary)) 表示成功写入；
 /// Ok(None) 表示本轮跳过（消息不足 / 模型输出不可解析）；Err 只在最底层 IO 故障时出现。
 pub async fn run_extraction(st: &ServerState, card: &str) -> Result<Option<String>> {
+    let connection = crate::routes::connection_settings(st);
+    let base_url = crate::routes::api_base_url(&connection, st.ollama_native);
+    if connection.summary_model.trim().is_empty() {
+        return Ok(None);
+    }
+
     // 1) 快照未处理对话（短临界区，不跨 await 持锁）
     let (transcript, upto_id) = {
         let mem = st.memory.lock().unwrap_or_else(|e| e.into_inner());
@@ -174,9 +180,9 @@ pub async fn run_extraction(st: &ServerState, card: &str) -> Result<Option<Strin
     // 2) 调提取模型（常驻 1B 通道；temperature=0 可复现；不强求 JSON——容错解析兜底）
     let msgs = extract_prompt(&transcript);
     let cfg = StreamConfig {
-        base_url: st.base_url.as_str(),
-        api_key: st.api_key.as_str(),
-        model: st.summary_model.as_str(),
+        base_url: base_url.as_str(),
+        api_key: connection.api_key.as_str(),
+        model: connection.summary_model.as_str(),
         include_usage: false,
         dump_path: None,
         response_format: None,
@@ -187,7 +193,7 @@ pub async fn run_extraction(st: &ServerState, card: &str) -> Result<Option<Strin
         presence_penalty: None,
         repetition_penalty: None,
         // 提取模型强制走 CPU，避免小模型抢占主模型显存
-        num_gpu: Some(st.summary_num_gpu),
+        num_gpu: Some(0),
         ollama_native: st.ollama_native,
     };
     let outcome = zhuo_llm::stream_chat_ex(&cfg, &msgs, |_| true).await?;
