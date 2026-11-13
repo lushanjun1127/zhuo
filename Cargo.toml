@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/zhuo-llm",
+    "crates/zhuo-card",
+    "crates/zhuo-session",
+    "crates/zhuo-memory",
+    "crates/zhuo-server",
+]
+# 纯 Web 架构：只保留 5 个核心 crate（桌面端与旧分叉已物理移除）

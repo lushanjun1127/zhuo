@@ -1,0 +1,28 @@
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"冬堡的冬天"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"特别长，屋"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"檐下的白雪"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"结成冰凌挂"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"在檐角，孩"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"子们最喜欢"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"摘下来当冰"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"棍舔，比蜜"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"糖还甜到心"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"。"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":346,"completion_tokens":22,"total_tokens":368,"timings":{"prompt_n":346,"prompt_ms":120.5,"predicted_n":22,"predicted_ms":1100.3}}}
+
+data: [DONE]
+

@@ -1,0 +1,46 @@
+{
+  "nodes": [
+    {
+      "id": "dongbao",
+      "name": "冬堡",
+      "node_type": "Lore",
+      "text_data": "北方山城，一年中有八个月在下雪。",
+      "trigger_keys": ["冬堡"]
+    },
+    {
+      "id": "college",
+      "name": "冬堡学院",
+      "node_type": "Lore",
+      "text_data": "建在山巅的旧图书馆改造而成，藏有大量禁书。",
+      "trigger_keys": ["冬堡学院", "学院", "图书馆", "禁书"]
+    },
+    {
+      "id": "tanghulu",
+      "name": "冰糖葫芦",
+      "node_type": "Lore",
+      "text_data": "冬堡集市最常见的小吃：山楂裹糖，冷天里糖壳格外脆。",
+      "trigger_keys": ["冰糖葫芦", "糖葫芦", "山楂", "小吃"]
+    },
+    {
+      "id": "sophie_market",
+      "name": "苏菲买糖葫芦",
+      "node_type": "Timeline",
+      "text_data": "苏菲总在黄昏时去集市买两串糖葫芦。",
+      "trigger_keys": ["苏菲", "黄昏", "集市", "两串"]
+    },
+    {
+      "id": "sophie",
+      "name": "苏菲",
+      "node_type": "Character",
+      "text_data": "冬堡学院的学生，性格安静，一提到糖葫芦就话多。",
+      "trigger_keys": ["苏菲", "Sophie"]
+    }
+  ],
+  "edges": [
+    { "from": "sophie", "to": "college", "description": "就读于", "link_strength": 80 },
+    { "from": "tanghulu", "to": "dongbao", "description": "产地", "link_strength": 60 },
+    { "from": "sophie_market", "to": "tanghulu", "description": "购买", "link_strength": 90 },
+    { "from": "sophie_market", "to": "dongbao", "description": "发生在", "link_strength": 50 },
+    { "from": "college", "to": "dongbao", "description": "位于", "link_strength": 70 }
+  ]
+}

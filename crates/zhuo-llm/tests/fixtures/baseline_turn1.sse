@@ -1,0 +1,14 @@
+data: {"choices":[{"index":0,"delta":{"content":"收到第1轮提问："},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"content":"冬天来了，最配一"},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"content":"串冰糖葫芦，糖葫"},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"content":"芦的糖壳还是脆的"},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"content":"，咬下去咔嚓响。"},"finish_reason":null}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":135,"completion_tokens":33,"total_tokens":168}}
+
+data: [DONE]
+

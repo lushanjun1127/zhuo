@@ -3,3 +3,10 @@ node_modules/
 dist/
 build/
 *.log
+target/
+.recovered/
+*.db
+*.db-journal
+dist/
+.env
+.workbuddy-ai/

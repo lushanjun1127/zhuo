@@ -1,0 +1,30 @@
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"下雪了？那可"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"太好了，我最"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"喜欢冬堡的雪"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"天。说到冬天"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"，糖葫芦是我"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"最喜欢吃的零"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"食，山楂裹着"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"亮晶晶的糖壳"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"，咬一口嘎嘣"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"脆，在集市上"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{"content":"非常受欢迎。"},"finish_reason":null}]}
+
+data: {"id":"cmpl-zhuo-ollama","object":"chat.completion.chunk","created":1731480000,"model":"hf.co/bartowski/Qwen2.5-Coder-3B-Instruct-abliterated-GGUF:Q4_K_M","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":193,"completion_tokens":73,"total_tokens":266,"timings":{"prompt_n":193,"prompt_ms":120.5,"predicted_n":73,"predicted_ms":1100.3}}}
+
+data: [DONE]
+

@@ -1,0 +1,17 @@
+[package]
+name = "zhuo-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+axum = "0.7"
+base64 = "0.22"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+zhuo-card = { path = "../zhuo-card" }
+zhuo-llm = { path = "../zhuo-llm" }
+zhuo-memory = { path = "../zhuo-memory" }

@@ -1,0 +1,10 @@
+: ping
+event: message
+data: {"choices":[{"index":0,"delta":{"content":"你好"},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"content":"，世界"},"finish_reason":null}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":128,"completion_tokens":4,"total_tokens":132}}
+
+data: [DONE]
+
